@@ -1,6 +1,6 @@
-name: Test Fleet
+name : Test Workflow
 
-on:
+on: 
   push:
     branches:
       - main
@@ -14,8 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::387385940921:role/github-action-deploy-role
           aws-region: us-east-1
@@ -26,11 +25,8 @@ jobs:
             --targets "Key=tag:App,Values=flask" \
             --document-name "AWS-RunShellScript" \
             --parameters '{"commands":["hostname -I"]}' \
-            --query 'Command.CommandId' \
-            --output text
+            --query 'Command.CommandId' --output text
           )
-
-          echo "Command ID: $CMD_ID"
 
           sleep 30
 
