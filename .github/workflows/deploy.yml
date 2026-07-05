@@ -1,0 +1,12 @@
+name : Application Deploying on Aws
+
+on:
+  workflow_call:
+
+jobs:
+  working-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name : Echo Message
+        run : echo "Application Deploying on Aws successfully ✅"
