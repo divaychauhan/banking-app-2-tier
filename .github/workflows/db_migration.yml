@@ -5,7 +5,7 @@ on:
 
 permissions:
   id-token: write
-  contene: read
+  contents: read
 
 jobs:
   init-db:
