@@ -42,7 +42,8 @@ jobs:
               "set -e",
               "aws s3 cp s3://387385940921-devops-scripts/init.py /tmp/init.py --region us-east-1",
               "aws s3 cp s3://387385940921-devops-scripts/init.sql /tmp/init.sql --region us-east-1",
-              "pip3 install pymysql boto3 -q",
+              "apt-get update -y",
+              "apt-get install -y python3 python3-pip python3-pymysql python3-boto3",
               "python3 /tmp/init.py",
               "rm -f /tmp/init.py /tmp/init.sql"
             ]}' \
@@ -84,7 +85,8 @@ jobs:
             --parameters '{"commands":[
               "set -e",
               "aws s3 cp s3://387385940921-devops-scripts/smoke_test.py /tmp/smoke_test.py --region us-east-1",
-              "pip3 install pymysql boto3 -q",
+              "apt-get update -y",
+              "apt-get install -y python3 python3-pip python3-pymysql python3-boto3",
               "python3 /tmp/smoke_test.py",
               "rm -f /tmp/smoke_test.py"
             ]}' \
