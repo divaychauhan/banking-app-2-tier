@@ -102,4 +102,4 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Smoke Test Passed ✅"
+          echo "✅ Smoke Test Passed ✅✅🤦"
