@@ -44,7 +44,7 @@ jobs:
             "commands": [
               "aws s3 cp s3://${SCRIPT_BUCKET}/smoke_test.py /tmp/smoke_test.py --region ${AWS_REGION}",
               "python3 -m pip install --user boto3 pymysql -q",
-              "python3 /tmp/smoke_test.py",
+              "python3 /tmp/smoke_test.py || exit 1",
               "rm -f /tmp/smoke_test.py"
             ]
           }
