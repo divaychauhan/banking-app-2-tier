@@ -15,7 +15,7 @@ jobs:
 
 
   smoke_testing:
-    needs: deploy
+    needs: deploying
     uses: ./.github/workflows/smoke_test.yml
     permissions:
       id-token: write
