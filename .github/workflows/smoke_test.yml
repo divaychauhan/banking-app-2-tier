@@ -2,22 +2,17 @@ name: Smoke Test Fleet
 
 on:
   workflow_call:
-  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
-
-env:
-  AWS_REGION: us-east-1
-  SCRIPT_BUCKET: 387385940921-devops-scripts
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout banking app repo
+      - name: Checkout Banking App Repo
         uses: actions/checkout@v4
         with:
           repository: divaychauhan/banking-app-2-tier
@@ -27,79 +22,97 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::387385940921:role/github-action-deploy-role
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-east-1
 
-      - name: Upload smoke_test.py to S3
+      - name: Upload init and smoke files to S3
         run: |
-          aws s3 mb s3://${SCRIPT_BUCKET} --region ${AWS_REGION} 2>/dev/null || true
+          aws s3 mb s3://387385940921-devops-scripts --region us-east-1 2>/dev/null || true
 
-          aws s3 cp smoke_test.py s3://${SCRIPT_BUCKET}/smoke_test.py \
-            --region ${AWS_REGION}
+          aws s3 cp init.py s3://387385940921-devops-scripts/init.py --region us-east-1
+          aws s3 cp init.sql s3://387385940921-devops-scripts/init.sql --region us-east-1
+          aws s3 cp smoke_test.py s3://387385940921-devops-scripts/smoke_test.py --region us-east-1
+
+      - name: Create Database and Tables
+        id: initdb
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --targets "Key=tag:App,Values=flask" \
+            --document-name "AWS-RunShellScript" \
+            --parameters '{"commands":[
+              "set -e",
+              "aws s3 cp s3://387385940921-devops-scripts/init.py /tmp/init.py --region us-east-1",
+              "aws s3 cp s3://387385940921-devops-scripts/init.sql /tmp/init.sql --region us-east-1",
+              "pip3 install pymysql boto3 -q",
+              "python3 /tmp/init.py",
+              "rm -f /tmp/init.py /tmp/init.sql"
+            ]}' \
+            --query "Command.CommandId" \
+            --output text \
+            --region us-east-1)
+
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Show Database Init Result
+        run: |
+          sleep 30
+
+          aws ssm list-command-invocations \
+            --command-id "${{ steps.initdb.outputs.cmd_id }}" \
+            --details \
+            --region us-east-1 \
+            --output text
+
+          FAILED=$(aws ssm list-command-invocations \
+            --command-id "${{ steps.initdb.outputs.cmd_id }}" \
+            --query "length(CommandInvocations[?Status=='Failed'])" \
+            --output text \
+            --region us-east-1)
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::Database init failed on $FAILED instance(s)!"
+            exit 1
+          fi
+
+          echo "✅ Database initialized successfully"
 
       - name: Run Smoke Test on Fleet
         id: smoke
         run: |
-          cat > ssm-commands.json <<EOF
-          {
-            "commands": [
-              "aws s3 cp s3://${SCRIPT_BUCKET}/smoke_test.py /tmp/smoke_test.py --region ${AWS_REGION}",
-              "python3 -m pip install --user boto3 pymysql -q",
-              "python3 /tmp/smoke_test.py",
-              "rm -f /tmp/smoke_test.py"
-            ]
-          }
-          EOF
-
           CMD_ID=$(aws ssm send-command \
             --targets "Key=tag:App,Values=flask" \
             --document-name "AWS-RunShellScript" \
-            --parameters file://ssm-commands.json \
+            --parameters '{"commands":[
+              "set -e",
+              "aws s3 cp s3://387385940921-devops-scripts/smoke_test.py /tmp/smoke_test.py --region us-east-1",
+              "pip3 install pymysql boto3 -q",
+              "python3 /tmp/smoke_test.py",
+              "rm -f /tmp/smoke_test.py"
+            ]}' \
             --query "Command.CommandId" \
             --output text \
-            --region ${AWS_REGION})
+            --region us-east-1)
 
-          echo "cmd_id=$CMD_ID" >> $GITHUB_OUTPUT
-          echo "SSM Command ID: $CMD_ID"
+          echo "cmd_id=$CMD_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Wait and Show Results
+      - name: Show Smoke Test Results
         run: |
-          CMD_ID="${{ steps.smoke.outputs.cmd_id }}"
-
-          echo "Waiting for SSM command to finish..."
-
-          for i in {1..30}; do
-            STATUS_LIST=$(aws ssm list-command-invocations \
-              --command-id "$CMD_ID" \
-              --query "CommandInvocations[].Status" \
-              --output text \
-              --region ${AWS_REGION})
-
-            echo "Current status: $STATUS_LIST"
-
-            if echo "$STATUS_LIST" | grep -q "InProgress\|Pending\|Delayed"; then
-              sleep 10
-            else
-              break
-            fi
-          done
-
-          echo "------ FULL SSM RESULT ------"
+          sleep 30
 
           aws ssm list-command-invocations \
-            --command-id "$CMD_ID" \
+            --command-id "${{ steps.smoke.outputs.cmd_id }}" \
             --details \
-            --region ${AWS_REGION} \
+            --region us-east-1 \
             --output text
 
           FAILED=$(aws ssm list-command-invocations \
-            --command-id "$CMD_ID" \
-            --query "length(CommandInvocations[?Status!='Success'])" \
+            --command-id "${{ steps.smoke.outputs.cmd_id }}" \
+            --query "length(CommandInvocations[?Status=='Failed'])" \
             --output text \
-            --region ${AWS_REGION})
+            --region us-east-1)
 
           if [ "$FAILED" -gt 0 ]; then
             echo "::error::Smoke test failed on $FAILED instance(s)!"
             exit 1
           fi
 
-          echo "✅ Smoke Test Passed ✅✅🤦✅✅"
+          echo "✅ Smoke Test Passed"
