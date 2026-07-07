@@ -12,7 +12,7 @@ env:
   REGION: us-east-1
   ECR: 387385940921.dkr.ecr.us-east-1.amazonaws.com
   IMAGE: 387385940921.dkr.ecr.us-east-1.amazonaws.com/flaskapp-simple-bank
-  S3_BUCKET: s3://720800607391-devops-scripts
+  S3_BUCKET: s3://387385940921-devops-scripts
 
 jobs:
   build-and-deploy:
