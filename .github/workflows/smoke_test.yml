@@ -70,11 +70,11 @@ jobs:
             --region us-east-1)
 
           if [ "$FAILED" -gt 0 ]; then
-            echo "::error::Database init failed on $FAILED instance(s)!"
+            echo "::error::Database initialization failed on $FAILED instance(s)."
             exit 1
           fi
 
-          echo "✅ Database initialized successfully"
+          echo "✅ Database initialized successfully."
 
       - name: Run Smoke Test on Fleet
         id: smoke
@@ -113,19 +113,8 @@ jobs:
             --region us-east-1)
 
           if [ "$FAILED" -gt 0 ]; then
-            echo "::error::Smoke test failed on $FAILED instance(s)!"
+            echo "::error::Smoke test failed on $FAILED instance(s)."
             exit 1
           fi
 
           echo "✅ Smoke Test Passed"
-
-      - name: Build and Push Image
-        run: |
-          docker build -t ${{ env.IMAGE }}:${{ env.VERSION }} .
-          docker push ${{ env.IMAGE }}:${{ env.VERSION }}
-          echo "Image Pushed : ${{ env.VERSION }} ✅"
-
-      - name: Upload Docker-Compose to S3
-        run: |
-          aws s3 cp docker-compose.yml ${{ env.S3_BUCKET }}/docker-compose.yml --region ${{ env.REGION }}
-          echo "Docker compose Uploaded ✅"
