@@ -1,10 +1,10 @@
-name: Deploy SimpleBank 
+name: Deploy SimpleBank
 
-on: 
- workflow_call: 
+on:
+  workflow_call:
 
-permissions: 
-  id-token: write 
+permissions:
+  id-token: write
   contents: read
 
 env:
@@ -17,6 +17,7 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,15 +50,41 @@ jobs:
             --targets "Key=tag:App,Values=flask" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy ${{ env.VERSION }} by ${{ github.actor }}" \
-            --parameters '{"commands":[
-              "set -e",
-              "aws ecr get-login-password --region ${{ env.REGION }} | docker login --username AWS --password-stdin ${{ env.ECR }}",
-              "mkdir -p /home/ubuntu/app",
-              "aws s3 cp ${{ env.S3_BUCKET }}/docker-compose.yml /home/ubuntu/app/docker-compose.yml",
-              "docker pull ${{ env.IMAGE }}:${{ env.VERSION }}",
-              "docker stop simplebank 2>/dev/null  true",
-              "cd /home/ubuntu/app && IMAGE_TAG=${{ env.VERSION }} docker compose up -d",
-              "docker ps --filter name=simplebank --format {{.Status}} | grep -q Up && echo CONTAINER_RUNNING  break
+            --parameters '{
+              "commands":[
+                "set -e",
+                "aws ecr get-login-password --region '${{ env.REGION }}' | docker login --username AWS --password-stdin '${{ env.ECR }}'",
+                "mkdir -p /home/ubuntu/app",
+                "aws s3 cp '${{ env.S3_BUCKET }}/docker-compose.yml' /home/ubuntu/app/docker-compose.yml",
+                "docker pull '${{ env.IMAGE }}:${{ env.VERSION }}'",
+                "docker stop simplebank 2>/dev/null || true",
+                "docker rm simplebank 2>/dev/null || true",
+                "cd /home/ubuntu/app && IMAGE_TAG='${{ env.VERSION }}' docker compose up -d",
+                "docker ps --filter name=simplebank --format \"{{.Status}}\" | grep -q Up && echo CONTAINER_RUNNING || (echo CONTAINER_FAILED && exit 1)"
+              ]
+            }' \
+            --query 'Command.CommandId' \
+            --output text \
+            --region ${{ env.REGION }})
+
+          echo "cmd_id=$CMD_ID" >> $GITHUB_OUTPUT
+
+      - name: Verify Deployment
+        run: |
+          for i in {1..10}; do
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "${{ steps.deploy.outputs.cmd_id }}" \
+              --query "CommandInvocations[*].Status" \
+              --output text \
+              --region ${{ env.REGION }})
+
+            echo "[$i] Status: $STATUS"
+
+            if echo "$STATUS" | grep -qE "InProgress|Pending"; then
+              sleep 10
+            else
+              break
+            fi
           done
 
           echo "============ DEPLOY RESULTS ============"
@@ -72,7 +99,7 @@ jobs:
               echo "Status   : $status"
               echo "$output" | tail -5
               echo "----------------------------------------"
-            done
+          done
 
           FAILED=$(aws ssm list-command-invocations \
             --command-id "${{ steps.deploy.outputs.cmd_id }}" \
@@ -80,8 +107,9 @@ jobs:
             --output text \
             --region ${{ env.REGION }})
 
-          [ "$FAILED" -gt 0 ] && \
-            echo "::error::Deploy failed on $FAILED instance(s)!" && \
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::Deploy failed on $FAILED instance(s)!"
             exit 1
+          fi
 
-           echo "✅ Deploy successful — ${{ env.VERSION }}"
+          echo "✅ Deploy successful — ${{ env.VERSION }}"
