@@ -7,15 +7,15 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  VERSION: v1
-  REGION: us-east-1
-  IMAGE: 387385940921.dkr.ecr.us-east-1.amazonaws.com/flaskapp-simple-bank
-  S3_BUCKET: s3://387385940921-devops-scripts
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
+    env:
+      VERSION: v1
+      REGION: us-east-1
+      IMAGE: 387385940921.dkr.ecr.us-east-1.amazonaws.com/flaskapp-simple-bank
+      S3_BUCKET: s3://387385940921-devops-scripts
 
     steps:
       - name: Checkout Banking App Repo
@@ -30,25 +30,30 @@ jobs:
           role-to-assume: arn:aws:iam::387385940921:role/github-action-deploy-role
           aws-region: ${{ env.REGION }}
 
+      - name: Verify Environment Variables
+        run: |
+          echo "VERSION=$VERSION"
+          echo "REGION=$REGION"
+          echo "IMAGE=$IMAGE"
+          echo "S3_BUCKET=$S3_BUCKET"
+
       - name: Login to Amazon ECR
         run: |
-          aws ecr get-login-password --region ${{ env.REGION }} | \
+          aws ecr get-login-password --region $REGION | \
           docker login --username AWS --password-stdin \
-          387385940921.dkr.ecr.${{ env.REGION }}.amazonaws.com
+          387385940921.dkr.ecr.$REGION.amazonaws.com
 
-          echo "Login Successful to ECR ✅"
-
-      - name: Build and Push Image
+      - name: Build Docker Image
         run: |
-          docker build -t ${{ env.IMAGE }}:${{ env.VERSION }} .
-          docker push ${{ env.IMAGE }}:${{ env.VERSION }}
+          docker build -t $IMAGE:$VERSION .
 
-          echo "Image Pushed: ${{ env.VERSION }} ✅"
+      - name: Push Docker Image
+        run: |
+          docker push $IMAGE:$VERSION
 
       - name: Upload Docker Compose to S3
         run: |
-          aws s3 cp docker-compose.yml \
-            ${{ env.S3_BUCKET }}/docker-compose.yml \
-            --region ${{ env.REGION }}
+          aws s3 cp docker-compose.yml $S3_BUCKET/docker-compose.yml --region $REGION
 
-          echo "Docker Compose Uploaded ✅"
+      - name: Deployment Complete
+        run: echo "Application deployed successfully."
